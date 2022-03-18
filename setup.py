@@ -33,6 +33,7 @@ setup(
     install_requires=['pytorch-lightning>=1.5.6', 'chytorch>=1.4'],
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.md').read_text('utf8'),
+    long_description_content_type='text/markdown',
     package_data={'chytorch.zoo.rxnmap': ['weights.pt']},
     classifiers=['Environment :: Plugins',
                  'Intended Audience :: Science/Research',
