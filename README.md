@@ -11,8 +11,8 @@ Use `pip install chytorch-rxnmap` to install release version.
 
 Or `pip install .` in source code directory to install DEV version.
 
-Perfom Atom-to-atom mapping
----------------------------
+Perform Atom-to-atom mapping
+----------------------------
 
 AAM integrated into `chython` package and available as reaction object method. See `chython` documentation [here](https://chython.readthedocs.io).
 
@@ -78,6 +78,6 @@ Training new model
 
     model = Model(lr_warmup=1e4, lr_period=5e5, lr_max=1e-4, lr_decrease_coef=.01, masking_rate=.15, **kwargs)
     # lr_warmup=1e4, lr_period=5e5, lr_max=1e-4, lr_decrease_coef=.01 - see chytorch.optim.lr_scheduler.WarmUpCosine. 
-    # kwargs - see chytorch.nn.reaction.ReactionEncoder.
+    # kwargs - see chytorch.nn.ReactionEncoder.
     # masking_rate - probability of token masking.
     trainer.fit(model, dl)
