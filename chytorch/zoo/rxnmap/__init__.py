@@ -16,55 +16,60 @@
 #  You should have received a copy of the GNU Lesser General Public License
 #  along with this program; if not, see <https://www.gnu.org/licenses/>.
 #
-from chython import ReactionContainer
+from functools import partial
 from pkg_resources import resource_stream
 from pytorch_lightning import LightningModule
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from torch import rand
-from torch.nn import LazyLinear
+from torch.nn import LazyLinear, Parameter
 from torch.nn.functional import cross_entropy
-from torch.optim import AdamW
+from torch.optim import AdamW, Optimizer
+from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
+from typing import Callable, Iterator
 from ...nn import ReactionEncoder
 from ...optim.lr_scheduler import WarmUpCosine
-from ...utils.data import ReactionDataset, collate_reactions, chained_collate
-
-
-class Unpack:
-    def __init__(self, data):
-        self.data = data
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, item):
-        return ReactionContainer.unpack(self.data[item])
+from ...utils.data import ReactionDataset, collate_reactions
 
 
 class Model(LightningModule):
-    def __init__(self, *, lr_warmup=1e4, lr_period=5e5, lr_max=1e-4, lr_decrease_coef=.01, masking_rate=.15, **kwargs):
+    def __init__(self, *, masking_rate=.15,
+                 lr_scheduler: Callable[[Optimizer], _LRScheduler] = None,
+                 optimizer: Callable[[Iterator[Parameter]], Optimizer] = None, **kwargs):
         super().__init__()
         self.encoder = ReactionEncoder(**kwargs)
-
         self.mlma = LazyLinear(118)
         self.mlmn = LazyLinear(self.encoder.molecule_encoder.centrality_encoder.num_embeddings - 2)
 
-        self.lr_warmup = lr_warmup
-        self.lr_period = lr_period
-        self.lr_max = lr_max
-        self.lr_decrease_coef = lr_decrease_coef
+        if lr_scheduler is None:
+            lr_scheduler = partial(WarmUpCosine, decrease_coef=.01, warmup=int(1e4), period=int(5e5))
+        if optimizer is None:
+            optimizer = partial(AdamW, lr=1e-4)
+
+        self.lr_scheduler = lr_scheduler
+        self.optimizer = optimizer
         self.masking_rate = masking_rate
         self.save_hyperparameters(kwargs)
 
     @classmethod
-    def pretrained(cls):
-        model = cls.load_from_checkpoint(resource_stream(__package__, 'weights.pt'), map_location='cpu')
+    def pretrained(cls, **kwargs):
+        model = cls.load_from_checkpoint(resource_stream(__package__, 'weights.pt'), map_location='cpu', **kwargs)
         model.eval()
         return model
 
+    def prepare_dataloader(self, reactions, **kwargs):
+        """
+        Prepare dataloader for training.
+
+        :param reactions: chython packed reactions list.
+        """
+        ds = ReactionDataset(reactions, distance_cutoff=self.encoder.max_distance, unpack=True)
+        return DataLoader(ds, collate_fn=collate_reactions, **kwargs)
+
     def forward(self, batch, *, mapping_task=False):
         if mapping_task:
-            return self.encoder(*batch, need_embedding=False, need_weights=True)
-        return self.encoder(*batch)
+            return self.encoder(batch, need_embedding=False, need_weights=True)
+        return self.encoder(batch)
 
     def training_step(self, batch, batch_idx):
         a, n, d, r = batch
@@ -72,7 +77,7 @@ class Model(LightningModule):
         ma = a.masked_fill((rand(a.shape, device=a.device) < self.masking_rate) & m, 2)
         mn = n.masked_fill((rand(n.shape, device=n.device) < self.masking_rate) & m, 1)
 
-        x = self.encoder(ma, mn, d, r)[m]  # atoms only embedding
+        x = self.encoder((ma, mn, d, r))[m]  # atoms only embedding
         atoms = self.mlma(x)
         neighbors = self.mlmn(x)
 
@@ -83,21 +88,14 @@ class Model(LightningModule):
         self.log('trn_loss_tot', l1.item() + l2.item(), sync_dist=True)
         return l1 + l2
 
-    def prepare_dataloader(self, reactions, **kwargs):
-        """
-        Prepare dataloader for training.
-
-        :param reactions: chython packed reactions list.
-        """
-        du = Unpack(reactions)
-        ds = ReactionDataset(du, distance_cutoff=self.encoder.molecule_encoder.spatial_encoder.num_embeddings - 3)
-        return DataLoader(ds, collate_fn=collate_reactions, **kwargs)
+    def configure_callbacks(self):
+        return [ModelCheckpoint(save_weights_only=True, save_last=True, every_n_train_steps=10000),
+                LearningRateMonitor(logging_interval='step')]
 
     def configure_optimizers(self):
-        o = AdamW(self.parameters(), lr=self.lr_max)
-        s = WarmUpCosine(o, self.lr_decrease_coef, self.lr_warmup, self.lr_period)
-        s.logger = self.log
-        return [o], [{'scheduler': s, 'interval': 'step'}]
+        o = self.optimizer(self.parameters())
+        s = self.lr_scheduler(o)
+        return [o], [{'scheduler': s, 'interval': 'step', 'name': 'lr_scheduler'}]
 
 
 __all__ = ['Model']
