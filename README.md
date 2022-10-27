@@ -3,6 +3,7 @@ Chytorch RxnMap
 
 Semisupervised Model trained on USPTO and Pistachio datasets.
 
+[Publication](https://pubs.acs.org/doi/10.1021/acs.jcim.2c00344) ([Preprint](https://doi.org/10.26434/chemrxiv-2022-bn5nt)) with details.
 
 Installation
 ------------
