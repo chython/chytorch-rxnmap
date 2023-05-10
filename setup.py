@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-#  Copyright 2022 Ramil Nugmanov <nougmanoff@protonmail.com>
+#  Copyright 2022, 2023 Ramil Nugmanov <nougmanoff@protonmail.com>
 #  This file is part of chytorch.
 #
 #  chytorch is free software; you can redistribute it and/or modify
@@ -23,14 +23,14 @@ from setuptools import setup, find_namespace_packages
 
 setup(
     name='chytorch-rxnmap',
-    version='1.3',
+    version='1.4',
     packages=find_namespace_packages(include=('chytorch.*',)),
     url='https://github.com/chython/chytorch-rxnmap',
     license='LGPLv3',
     author='Dr. Ramil Nugmanov',
     author_email='nougmanoff@protonmail.com',
     python_requires='>=3.8',
-    install_requires=['pytorch-lightning>=1.5.6', 'chytorch>=1.13,<2.0'],
+    install_requires=['chytorch>=1.42,<2.0'],
     zip_safe=False,
     long_description=(Path(__file__).parent / 'README.md').read_text('utf8'),
     long_description_content_type='text/markdown',
