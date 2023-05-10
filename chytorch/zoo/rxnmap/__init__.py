@@ -66,9 +66,9 @@ class Model(LightningModule):
         ds = ReactionDataset(reactions, distance_cutoff=self.encoder.max_distance, unpack=True)
         return DataLoader(ds, collate_fn=collate_reactions, **kwargs)
 
-    def forward(self, batch, *, mapping_task=False, averaged_weights=False):
+    def forward(self, batch, *, mapping_task=False):
         if mapping_task:
-            return self.encoder(batch, need_embedding=False, need_weights=True, averaged_weights=averaged_weights)
+            return self.encoder(batch, need_embedding=False, need_weights=True)
         return self.encoder(batch)
 
     def training_step(self, batch, batch_idx):
